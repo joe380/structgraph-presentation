@@ -57,8 +57,9 @@ return mdb,sgRef,t,sg</code></pre></div></div></section>
 where m.name =~ '.+Map' // regular expression matching
 return mdb,sgRef,t,sg</code></pre></div></div></section>
 <section id="call_graph"><h2>Call graph</h2><div class="paragraph"><p>Where are transaction created in this business method?</p></div>
-<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match p=(m:Method{simpleName:"CPBIProcessingScheduler#process()V"})
-        -[:invokes|overriden*..14]-&gt;(m2)&lt;-[:hasMethod]-(c:Class)
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match p=(m:Method{name:"com.rwe.icon.si.cr.schedule."+
+        "CPBIProcessingScheduler#process()V"})
+        -[:invokes|overriden*..14]-&gt;(m2{public:true})&lt;-[:hasMethod]-(c:Class)
 where (m2:TransactionAttribute and
        m2.TransactionAttribute="REQUIRES_NEW") or
       (c:TransactionAttribute and
@@ -173,7 +174,7 @@ with m, reduce(path = null, p in allPossibleSuperMethods |
 with m,last(superMethodPath) as superMethod
 // so we mark the replacement
 create m-[:replaceBy]-&gt;superMethod</code></pre></div></div></section>
-<section id="structgraph_status"><h2>Structgraph status</h2><div class="ulist"><ul><li><p>To be open sourced soon</p></li><li><p>Plan to support own practical needs, and accept contributions</p></li></ul></div></section>
+<section id="structgraph_status"><h2>Structgraph status</h2><div class="ulist"><ul><li><p><a href="https://github.com/structgraph/structgraph" class="bare">https://github.com/structgraph/structgraph</a></p></li><li><p>Apache-licensed</p></li><li><p>Plan to support own practical needs, and accept contributions</p></li></ul></div></section>
 <section id="future_directions"><h2>Future directions</h2><div class="ulist"><ul><li><p>Modules</p></li><li><p>Method parameter annotations</p></li><li><p>CDI, JSF</p></li><li><p>Other storage</p></li><li><p>Mark loop nesting for invocations</p></li><li><p>&#8230;&#8203;</p></li></ul></div></section>
 <section id="you_re_welcome_to_help"><h2>You&#8217;re welcome to help</h2></section></div></div><script src="reveal.js/lib/js/head.min.js"></script><script src="reveal.js/js/reveal.js"></script><script type="text/javascript">// See https://github.com/hakimel/reveal.js#configuration for a full list of configuration options
 Reveal.initialize({
