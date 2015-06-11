@@ -1,0 +1,256 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="author" content="Patrik Duditš, @pdudits"><title>Get to know your application with graph database</title><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui" name="viewport"><link href="reveal.js/css/reveal.css" rel="stylesheet"><link rel="stylesheet" href="theme/white.css" id="theme"><link href="theme/source/zenburn.css" rel="stylesheet"><script type="text/javascript">document.write( '<link rel="stylesheet" href="reveal.js/css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );</script></head><body><div class="reveal"><div class="slides"><section><h2>Get to know your application with graph database</h2><p><small>Patrik Duditš, @pdudits</small></p></section><section id="how_large_is_your_application"><h2>How large is your application?</h2><div class="paragraph fragment"><p>Java EE application with over 3000 classes</p></div></section>
+<section id="answer_this"><h2>Answer this</h2><div class="paragraph"><p>Which message driven beans depend on singletons?</p></div>
+<div class="paragraph fragment"><p>That contain a map?</p></div></section>
+<section id=""><h2> </h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="java language-java">@MessageDriven(activationConfig = {
+  @ActivationConfigProperty(propertyName="destinationType"
+                            propertyValue="javax.jms.Topic"),
+  @ActivationConfigProperty(propertyName="destinationName"
+                            propertyValue="c.broadcast") } )
+public class Processor {
+  @EJB
+  FooService service;
+
+  public void onMessage(Message m) {  }
+}
+
+@Singleton
+public class FooService {
+  Map&lt;Input, CachedValue&gt; cache;
+}</code></pre></div></div></section>
+<section id="how_would_you_do_that_in_your_ide"><h2>How would you do that in your IDE?</h2><div class="ulist fragment"><ul><li><p>Go to definition</p></li><li><p>Go to implementation</p></li><li><p>Find usages</p></li></ul></div></section>
+<section id="structgraph"><h2>structgraph</h2><div class="paragraph"><p>Your application&#8217;s structure in graph database</p></div></section>
+<section id="ingredients"><h2>Ingredients</h2><div class="ulist"><ul><li class="fragment"><p>Cypher: neo4j&#8217;s powerful graph query and modification language</p></li><li class="fragment"><p>Bytecode: buildtool- and framework- independent application structure</p></li></ul></div></section>
+<section id="function"><h2>Function</h2><div class="dlist"><dl><dt class="hdlist1">source</dt><dd><p>Walk over jar (ear, war) files and look for class files</p></dd><dt class="hdlist1">collect</dt><dd><p>Read the class file, extract the information</p></dd><dt class="hdlist1">sink</dt><dd><p>Store the information into neo4j</p></dd></dl></div></section>
+<section id="what_is_extracted"><h2>What is extracted</h2><div class="dlist"><dl><dt class="hdlist1">Types</dt><dd><div class="ulist"><ul><li><p>Inheritance, Annotations</p></li></ul></div></dd><dt class="hdlist1">Fields</dt><dd><div class="ulist"><ul><li><p>Types, Annotations, Type Parameters</p></li></ul></div></dd><dt class="hdlist1">Methods</dt><dd><div class="ulist"><ul><li><p>Annotations, Invocations of other methods</p></li><li><p>Fields method is invoked upon</p></li></ul></div></dd></dl></div></section>
+<section id="neo4j_data_model"><h2>Neo4j data model</h2><div class="imageblock" style=""><div class="content"><img src="neo4j-data-model.svg" alt="neo4j data model"></div></div></section>
+<section id="core_structgraph_schema"><h2>Core structgraph schema</h2><div class="imageblock" style=""><div class="content"><img src="structgraph-basic-model.svg" alt="structgraph basic model"></div></div></section>
+<section id="simple_queries"><h2>Simple queries</h2><div class="paragraph"><p>All methods called save</p></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">MATCH (c:Class)-[:hasMethod]-&gt;(m:Method)
+WHERE m.methodName = 'save'
+RETURN c,m</code></pre></div></div>
+<div class="paragraph"><p>Syntax in detail in
+<a href="http://neo4j.com/docs/stable/cypher-refcard/">Cypher RefCard</a>
+and
+<a href="http://neo4j.com/docs/stable/cypher-query-lang.html">Cypher Reference</a></p></div></section>
+<section id="simple_queries_2"><h2>Simple queries</h2><div class="paragraph"><p>All message driven beans</p></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">MATCH (c:Class)-[aRel:annotated]-&gt;(aValue:AnnotationValue)
+      -[:hasType]-&gt;
+      (aType:Annotation{name:'javax.ejb.MessageDriven'})
+RETURN c,aValue,aType</code></pre></div></div></section>
+<section id="annotation_matching_shortcuts"><h2>Annotation matching shortcuts</h2><div class="paragraph"><p>During usage several shortcuts were added to better match annotations:</p></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">(c)-[aRel]-&gt;(aValue:AnnotationValue)-[:hasType]-&gt;(aType{name:'...'})</code></pre></div></div>
+<div class="olist arabic"><ol class="arabic"><li class="fragment"><p>aValue.name = aType.simpleName</p></li><li class="fragment"><p>aRel.with = aType.name, aRel.w = aType.simpleName</p></li><li class="fragment"><p>c has label aType.simpleName</p></li></ol></div></section>
+<section id="shortcuts_examples"><h2>Shortcuts examples</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (c:Class)-[:annotated{w:'MessageDriven'}]-&gt;(aValue)
+return c,aValue</code></pre></div></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (c:MessageDriven) return c</code></pre></div></div></section>
+<section id="which_message_driven_beans_depend_on_singletons"><h2>Which message driven beans depend on singletons?</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (mdb:MessageDriven)-[:hasField]-&gt;(sgRef:EJB)-[:hasType]-&gt;(t),
+      t&lt;-[:inherits*0..]-(sg:Singleton)
+return mdb,sgRef,t,sg</code></pre></div></div></section>
+<section id="that_have_a_map"><h2>&#8230;&#8203; that have a map?</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (mdb:MessageDriven)-[:hasField]-&gt;(sgRef:EJB)-[:hasType]-&gt;(t),
+      t&lt;-[:inherits*0..]-(sg:Singleton)-[:hasField]-&gt;(f),
+      f-[:hasType]-(m{name:'java.util.Map'})
+return mdb,sgRef,t,sg</code></pre></div></div></section>
+<section id="subtle_bug_there"><h2>Subtle bug there</h2><div class="paragraph"><p>We do not index JDK classes, so this won&#8217;t catch e.g. ConcurrentMap</p></div></section>
+<section id="pragmatic_solution"><h2>Pragmatic solution</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (mdb:MessageDriven)-[:hasField]-&gt;(sgRef:EJB)-[:hasType]-&gt;(t),
+      t&lt;-[:inherits*0..]-(sg:Singleton)-[:hasField]-&gt;(f),
+      f-[:hasType]-(m)
+where m.name =~ '.+Map' // regular expression matching
+return mdb,sgRef,t,sg</code></pre></div></div></section>
+<section id="call_graph"><h2>Call graph</h2><div class="paragraph"><p>Where are transaction created in this business method?</p></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match p=(m:Method{simpleName:"CPBIProcessingScheduler#process()V"})
+        -[:invokes|overriden*..14]-&gt;(m2)&lt;-[:hasMethod]-(c:Class)
+where (m2:TransactionAttribute and
+       m2.TransactionAttribute="REQUIRES_NEW") or
+      (c:TransactionAttribute and
+       c.TransactionAttribute="REQUIRES_NEW")
+optional match m2-[:annotated{w:"TransactionAttribute"}]-&gt;(a1)
+optional match c-[:annotated{w:"TransactionAttribute"}]-&gt;(a2)
+return p,a1,a2</code></pre></div></div></section>
+<section id="aggregations"><h2>Aggregations</h2><div class="paragraph"><p>Most wanted EJBs</p></div>
+<div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (c:Class)-[a:annotated]-&gt;(), c-[:inherits*0..1]-&gt;(interface),
+      interface&lt;-[:hasType]-(f:Field)
+where a.name =~ "javax\\.ejb.+" and not interface.name =~ "java.+"
+  and not ()-[:inherits]-&gt;c
+return c.name, interface.name, count(f) as usage
+order by usage desc</code></pre></div></div></section>
+<section id="grammar_recap"><h2>Grammar recap</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">MATCH (variable:Label)-[v2:RelationType]-&gt;(target),
+      (target)-[:type1|type2*0..n]-&gt;(trans-closure{prop: value})
+OPTIONAL MATCH (variable)--&gt;(like-outer-join)
+WHERE v2.prop =~ "regexp"
+RETURN v2.prop2</code></pre></div></div></section>
+<section id="implementation_of_structgraph"><h2>Implementation of structgraph</h2></section>
+<section id="function_2"><h2>Function</h2><div class="dlist"><dl><dt class="hdlist1">source</dt><dd><p>Walk over jar (ear, war) files and look for class files</p></dd><dt class="hdlist1">collect</dt><dd><p>Read the class file, extract the information</p></dd><dt class="hdlist1">sink</dt><dd><p>Store the information into neo4j</p></dd></dl></div></section>
+<section id="options_for_reading_class_data"><h2>Options for reading class data</h2><div class="dlist"><dl><dt class="hdlist1">java.lang.reflect: Java reflection</dt><dd><p>Runtime - needs linking</p></dd><dt class="hdlist1">javax.lang.model: Annotation processing</dt><dd><p>Compile - needs all dependencies</p></dd><dt class="hdlist1">javadoc</dt><dd><p>Annotation processor&#8217;s older brother</p></dd></dl></div>
+<div class="paragraph fragment"><p>No method callgraphs!</p></div></section>
+<section id="options_for_reading_class_data_2"><h2>Options for reading class data</h2><div class="dlist"><dl><dt class="hdlist1">Java parser: Eclipse JDT</dt><dd><p>Needs to cope with project structure</p></dd><dt class="hdlist1">Java bytecode: ASM</dt><dd><p>Unified structure, includes generated artifacts</p></dd></dl></div></section>
+<section id="asm_visitors_all_way_down"><h2>ASM: Visitors all way down</h2><div class="imageblock" style=""><div class="content"><img src="asm-visitors.svg" alt="asm visitors"></div></div></section>
+<section id="neo4j_embedded_api"><h2>Neo4j Embedded API</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="java language-java">GraphDatabaseService db = new GraphDatabaseFactory()
+    .newEmbeddedDatabase(path);
+Runtime.getRuntime().addShutdownHook(new Thread(db::shutdown));
+try (Transaction tx = db.beginTx()) {
+  Label lbl = () -&gt; "Class";
+  Node node = db.createNode(lbl);
+  tx.success();
+}</code></pre></div></div></section>
+<section id="finding"><h2>Finding</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="java language-java">try (Transaction tx = db.beginTx()) {
+  // single result by label, property, value
+  Node result = db.findNode(label, propertyName, propertyValue);
+  // multiple results
+  try (ResourceIterator&lt;Node&gt; nodes =
+       db.findNodes(type, name, value)) {
+    while (nodes.hasNext()) {
+      Node n = nodes.next();
+    }
+  }
+}</code></pre></div></div></section>
+<section id="cypher_queries"><h2>Cypher queries</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="java language-java">try (Transaction tx = db.beginTx();
+     Result result = db.execute(
+      "match (n {name: 'my node'}) return n, n.name")) {
+  while (result.hasNext()) {
+    Map&lt;String,Object&gt; row = result.next();
+    for (Entry&lt;String,Object&gt; column : row.entrySet()) {
+      println(column.getKey() + ": " + column.getValue() + "; ");
+    }
+  }
+}</code></pre></div></div></section>
+<section id="modifying_data_with_neo4j"><h2>Modifying data with Neo4j</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (a)-[:invokes|overriden]-&gt;(b)
+create b-[:invokedBy]-&gt;a
+// Created 106590 relationships in 24676 ms.</code></pre></div></div></section>
+<section id="find_overriding_methods"><h2>Find overriding methods</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (m:Method)&lt;-[:hasMethod]-(i:Class)-[:inherits*..4]-&gt;(c:Class),
+      c-[:hasMethod]-&gt;(d:Method)
+where d.methodName = m.methodName AND d.signature = m.signature
+create d-[:overriden]-&gt;m</code></pre></div></div></section>
+<section id="count_overrides"><h2>Count overrides</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (d:Method)-[r:overriden]-&gt;()
+ with d, count(r) as c
+match d-[r:overriden]-&gt;()
+  set r.p = 1.0/c</code></pre></div></div></section>
+<section id="method_invocations"><h2>Method invocations</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="java language-java">public class BaseClass {
+    protected void methodInParent() {
+    }
+}
+
+public class DerivedClass extends BaseClass {
+    public void method() {
+        methodInParent(); // [1]
+    }
+}</code></pre></div></div>
+<div class="paragraph"><p>[1] What does the bytecode say?</p></div></section>
+<section id="virtual_method_invocation_in_bytecode"><h2>Virtual method invocation in bytecode</h2><div class="listingblock"><div class="content"><pre class="highlight"><code>$ javap -c DerivedClass.class
+Compiled from "DerivedClass.java"
+public class DerivedClass extendsBaseClass {
+  public DerivedClass();
+    Code:
+       0: aload_0
+       1: invokespecial #1 // Method BaseClass."&lt;init&gt;":()V
+       4: return
+  public void method();
+    Code:
+       0: aload_0
+       1: invokevirtual #2 // Method methodInParent:()V
+       4: return
+}</code></pre></div></div></section>
+<section id="virtual_calls_query"><h2>Virtual calls query</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (m:Method) where not m&lt;-[:hasMethod]-()</code></pre></div></div>
+<div class="paragraph"><p>We had methods without being declared in class</p></div></section>
+<section id="virtual_calls_query_2"><h2>Virtual calls query</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">match (m:Method) where not m&lt;-[:hasMethod]-()
+// method.name is Class#name(signature)
+ with m, split(m.name,'#')[0] as className
+// find a method with same name and signature
+match (superMethod:Method{methodName:m.methodName,
+       signature:m.signature}),
+// which is declared in a superclass
+    p=(c:Class{name:className})-[:inherits*]-&gt;(super)
+      -[:hasMethod]-&gt;superMethod //...</code></pre></div></div></section>
+<section id="virtual_calls_query_3"><h2>Virtual calls query</h2><div class="listingblock"><div class="content"><pre class="highlight"><code class="cypher language-cypher">with m, collect(p) as allPossibleSuperMethods
+// and now keep the closest method (with the shortest path to it)
+with m, reduce(path = null, p in allPossibleSuperMethods |
+     case
+// the candidate is either better than nothing or shorter than
+// previous
+       when path is null or length(p) &lt; length(path) then p
+       else path // or we've got our winner already
+     end) as superMethodPath
+// and the last on the path is the closest declared method
+with m,last(superMethodPath) as superMethod
+// so we mark the replacement
+create m-[:replaceBy]-&gt;superMethod</code></pre></div></div></section>
+<section id="structgraph_status"><h2>Structgraph status</h2><div class="ulist"><ul><li><p>To be open sourced soon</p></li><li><p>Plan to support own practical needs, and accept contributions</p></li></ul></div></section>
+<section id="future_directions"><h2>Future directions</h2><div class="ulist"><ul><li><p>Modules</p></li><li><p>Method parameter annotations</p></li><li><p>CDI, JSF</p></li><li><p>Other storage</p></li><li><p>Mark loop nesting for invocations</p></li><li><p>&#8230;&#8203;</p></li></ul></div></section>
+<section id="you_re_welcome_to_help"><h2>You&#8217;re welcome to help</h2></section></div></div><script src="reveal.js/lib/js/head.min.js"></script><script src="reveal.js/js/reveal.js"></script><script type="text/javascript">// See https://github.com/hakimel/reveal.js#configuration for a full list of configuration options
+Reveal.initialize({
+  // Display controls in the bottom right corner
+  controls: true,
+  // Display a presentation progress bar
+  progress: true,
+  // Display the page number of the current slide
+  slideNumber: false,
+  // Push each slide change to the browser history
+  history: true,
+  // Enable keyboard shortcuts for navigation
+  keyboard: true,
+  // Enable the slide overview mode
+  overview: true,
+  // Vertical centering of slides
+  center: true,
+  // Enables touch navigation on devices with touch input
+  touch: true,
+  // Loop the presentation
+  loop: false,
+  // Change the presentation direction to be RTL
+  rtl: false,
+  // Turns fragments on and off globally
+  fragments: true,
+  // Flags if the presentation is running in an embedded mode,
+  // i.e. contained within a limited portion of the screen
+  embedded: false,
+  // Number of milliseconds between automatically proceeding to the
+  // next slide, disabled when set to 0, this value can be overwritten
+  // by using a data-autoslide attribute on your slides
+  autoSlide: 0,
+  // Stop auto-sliding after user input
+  autoSlideStoppable: true,
+  // Enable slide navigation via mouse wheel
+  mouseWheel: false,
+  // Hides the address bar on mobile devices
+  hideAddressBar: true,
+  // Opens links in an iframe preview overlay
+  previewLinks: false,
+  // Theme (e.g., beige, black, blood, league, moon, night, serif, simple, sky, solarized, white)
+  // NOTE setting the theme in the config no longer works in reveal.js 3.x
+  //theme: Reveal.getQueryHash().theme || 'league',
+  // Transition style (e.g., none, fade, slide, convex, concave, zoom)
+  transition: Reveal.getQueryHash().transition || 'fade',
+  // Transition speed (e.g., default, fast, slow)
+  transitionSpeed: 'default',
+  // Transition style for full page slide backgrounds (e.g., none, fade, slide, convex, concave, zoom)
+  backgroundTransition: 'fade',
+  // Number of slides away from the current that are visible
+  viewDistance: 3,
+  // Parallax background image (e.g., "'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg'")
+  parallaxBackgroundImage: '',
+  // Parallax background size in CSS syntax (e.g., "2100px 900px")
+  parallaxBackgroundSize: '',
+
+  // The "normal" size of the presentation, aspect ratio will be preserved
+  // when the presentation is scaled to fit different resolutions. Can be
+  // specified using percentage units.
+  width: 960,
+  height: 700,
+
+  // Factor of the display size that should remain empty around the content
+  margin: 0.1,
+
+  // Bounds for smallest/largest possible scale to apply to content
+  minScale: 0.2,
+  maxScale: 1.5,
+
+  // Optional libraries used to extend on reveal.js
+  dependencies: [
+      { src: 'reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+      { src: 'reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: 'reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: "highlightjs-cypher/javascripts/cypher.js" },
+      { src: 'reveal.js/plugin/highlight/highlight.js', async: true, callback: function() { hljs.registerLanguage('cypher', cypher); hljs.initHighlightingOnLoad(); } },
+      { src: 'reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+      { src: 'reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+  ]
+});</script></body></html>
